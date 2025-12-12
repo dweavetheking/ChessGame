@@ -44,7 +44,6 @@ local function queuePlayer(player: Player)
 		activeMatches[playerWhite] = newMatch
 		activeMatches[playerBlack] = newMatch
 
-		-- Send the initial state
 		newMatch:broadcastUpdate()
 	end
 end
@@ -71,6 +70,33 @@ local function startAIMatch(player: Player)
 	activeMatches[aiPlayer] = newMatch -- So we can look up the match by AI object
 
 	newMatch:broadcastUpdate()
+end
+
+local function startTutorialMatch(player: Player)
+	if activeMatches[player] then
+		return
+	end
+
+	local aiPlayer = {
+		Name = "Tutorial AI",
+		UserId = -2,
+		__isAI = true,
+		Elo = 800,
+	}
+
+	local newMatch = MatchManager.createTutorialMatch(player, aiPlayer)
+	activeMatches[player] = newMatch
+	activeMatches[aiPlayer] = newMatch
+
+	newMatch:broadcastUpdate()
+end
+
+local function onTutorialEnded(player: Player)
+	local profile = ProfileStore.getProfile(player)
+	if profile then
+		profile.hasCompletedTutorial = true
+		ProfileStore.saveProfile(player)
+	end
 end
 
 --[=[
@@ -122,7 +148,7 @@ local function onPlayerRemoving(player: Player)
 	-- End any active match
 	local match = activeMatches[player]
 	if match then
-		if match.isAI_Match then
+		if match.isAI_Match and not match.isTutorial then
 			-- If it's an AI match, the human player loses
 			local humanPlayer = (match.players.White == player) and player or match.players.Black
 			local aiPlayer = (match.players.White == player) and match.players.Black or match.players.White
@@ -138,7 +164,9 @@ local function onPlayerRemoving(player: Player)
 			local winner = (match.players.White == player) and match.players.Black or match.players.White
 			match.status = `{winner.Name}Won_Disconnect`
 			print(`Player {player.Name} disconnected. Match ended.`)
-			match:broadcastUpdate() -- Notify the other player
+			if not winner.__isAI then
+				match:broadcastUpdate() -- Notify the other player
+			end
 		end
 
 		-- Clean up
@@ -153,10 +181,16 @@ function GameServer.start()
 	print("GameServer started.")
 	Remotes.RequestQuickMatch.OnServerEvent:Connect(queuePlayer)
 	Remotes.RequestAIMatch.OnServerEvent:Connect(startAIMatch)
+	Remotes.RequestTutorialMatch.OnServerEvent:Connect(startTutorialMatch)
+	Remotes.TutorialEnded.OnServerEvent:Connect(onTutorialEnded)
 	Remotes.MoveAttempt.OnServerEvent:Connect(onMoveAttempt)
 	Remotes.MagicMoveAttempt.OnServerEvent:Connect(onMagicMoveAttempt)
 	Remotes.ResignAttempt.OnServerEvent:Connect(onResignAttempt)
 
+	Players.PlayerAdded:Connect(function(player)
+		local profile = ProfileStore.loadProfile(player)
+		Remotes.PlayerProfileLoaded:FireClient(player, profile)
+	end)
 	Players.PlayerRemoving:Connect(onPlayerRemoving)
 end
 

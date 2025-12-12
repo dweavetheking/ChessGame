@@ -4,12 +4,8 @@
 	@module MagicMoveSystem
 ]=]
 
-local ServerScriptService = game:GetService("ServerScriptService")
--- NOTE: This will be a ReplicatedStorage require on the client
-local Shared = ServerScriptService:IsClient() and game:GetService("ReplicatedStorage").src.shared or ServerScriptService.src.shared
-
-local GameTypes = require(Shared.GameTypes)
-local ChessEngine = require(Shared.ChessEngine)
+local GameTypes = require(script.Parent.GameTypes)
+local ChessEngine = require(script.Parent.ChessEngine)
 
 local MagicMoveSystem = {}
 

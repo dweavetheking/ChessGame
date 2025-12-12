@@ -71,7 +71,26 @@ function MatchManager.createMatch(playerWhite: Player, playerBlack: Player): Mat
 	return newMatch
 end
 
+function MatchManager.createTutorialMatch(playerWhite: Player, playerBlack: Player): Match
+	local newMatch = MatchManager.createMatch(playerWhite, playerBlack)
+	newMatch.isTutorial = true
+
+	-- Custom board layout for the tutorial
+	local tutorialBoard = {}
+	for y = 1, 8 do
+		tutorialBoard[y] = {}
+	end
+	tutorialBoard[2][5] = { pieceType = GameTypes.PieceTypes.Pawn, color = GameTypes.Colors.White, id = "tut_pawn" }
+	tutorialBoard[7][3] = { pieceType = GameTypes.PieceTypes.Pawn, color = GameTypes.Colors.Black, id = "tut_enemy_pawn" }
+	tutorialBoard[4][3] = { pieceType = GameTypes.PieceTypes.Rook, color = GameTypes.Colors.White, id = "tut_rook" }
+
+	newMatch.boardState = tutorialBoard
+
+	return newMatch
+end
+
 function MatchManager:_processAITurn()
+	if self.isTutorial then return end -- AI does nothing in tutorial
 	task.wait(1) -- Simulate thinking time
 
 	local aiPlayer = self.players[self.activeColor]
@@ -124,7 +143,9 @@ end
 function MatchManager:broadcastUpdate()
 	local snapshot = self:getSnapshot()
 	Remotes.MatchStateUpdate:FireClient(self.players.White, snapshot)
-	Remotes.MatchStateUpdate:FireClient(self.players.Black, snapshot)
+	if not self.players.Black.__isAI then
+		Remotes.MatchStateUpdate:FireClient(self.players.Black, snapshot)
+	end
 	print("Broadcasting update for match " .. self.id)
 end
 
@@ -175,13 +196,12 @@ function MatchManager:handlePlayerMove(player: Player, fromSquare: { x: number, 
 		self.status = `{playerColor}Won`
 		print(`Checkmate! {playerColor} wins.`)
 		local oldElo, newElo = self:_updateElo(playerColor)
-		Remotes.MatchEnd:FireClient(self.players[playerColor], { winner = playerColor, status = self.status, oldElo = oldElo, newElo = newElo })
+		Remotes.MatchEnd:FireClient(player, { winner = playerColor, status = self.status, oldElo = oldElo, newElo = newElo })
 	elseif ChessEngine.isStalemate(self.boardState, self.activeColor) then
 		self.status = "Draw"
 		print("Stalemate!")
 		local oldElo, newElo = self:_updateElo(nil) -- nil winner means draw
-		Remotes.MatchEnd:FireClient(self.players.White, { winner = nil, status = self.status, oldElo = oldElo, newElo = newElo })
-		Remotes.MatchEnd:FireClient(self.players.Black, { winner = nil, status = self.status, oldElo = oldElo, newElo = newElo })
+		Remotes.MatchEnd:FireClient(player, { winner = nil, status = self.status, oldElo = oldElo, newElo = newElo })
 	end
 
 	table.insert(self.moveHistory, { from = fromSquare, to = toSquare })
@@ -244,12 +264,11 @@ function MatchManager:handleMagicMove(
 	if ChessEngine.isCheckmate(self.boardState, self.activeColor) then
 		self.status = `{playerColor}Won`
 		local oldElo, newElo = self:_updateElo(playerColor)
-		Remotes.MatchEnd:FireClient(self.players[playerColor], { winner = playerColor, status = self.status, oldElo = oldElo, newElo = newElo })
+		Remotes.MatchEnd:FireClient(player, { winner = playerColor, status = self.status, oldElo = oldElo, newElo = newElo })
 	elseif ChessEngine.isStalemate(self.boardState, self.activeColor) then
 		self.status = "Draw"
 		local oldElo, newElo = self:_updateElo(nil)
-		Remotes.MatchEnd:FireClient(self.players.White, { winner = nil, status = self.status, oldElo = oldElo, newElo = newElo })
-		Remotes.MatchEnd:FireClient(self.players.Black, { winner = nil, status = self.status, oldElo = oldElo, newElo = newElo })
+		Remotes.MatchEnd:FireClient(player, { winner = nil, status = self.status, oldElo = oldElo, newElo = newElo })
 	end
 
 	self:broadcastUpdate()
@@ -278,13 +297,12 @@ function MatchManager:handleResignation(player: Player)
 	local oldElo, newElo = self:_updateElo(winnerColor)
 
 	self:broadcastUpdate()
-	Remotes.MatchEnd:FireClient(self.players[winnerColor], { winner = winnerColor, status = self.status, oldElo = oldElo, newElo = newElo })
 	Remotes.MatchEnd:FireClient(player, { winner = winnerColor, status = self.status, oldElo = oldElo, newElo = newElo })
 end
 
 function MatchManager:_updateElo(winnerColor: string?)
-	if not self.isAI_Match then
-		return
+	if not self.isAI_Match or self.isTutorial then
+		return 0, 0
 	end
 
 	local humanPlayer, aiPlayer = nil, nil

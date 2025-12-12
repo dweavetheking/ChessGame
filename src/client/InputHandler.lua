@@ -39,7 +39,8 @@ function InputHandler.new(boardRenderer, uiController)
 	self.boardState = nil
 
 	self.selectedSquare = nil -- {x: number, y: number}
-	self.selectionMode = "None" -- "None", "Move", "MagicUpgrade", "MagicDowngrade"
+	self.selectionMode = "None" -- "None", "Move", "MagicUpgrade", "MagicDowngrade", "Tutorial"
+	self.tutorialCallback = nil
 
 	self:_connectUICalls()
 
@@ -129,7 +130,21 @@ function InputHandler:_handleInput(input: InputObject)
 	end
 end
 
+function InputHandler:setTutorialCallback(callback: ((any) -> ())?)
+	self.tutorialCallback = callback
+	if callback then
+		self.selectionMode = "Tutorial"
+	else
+		self.selectionMode = "None"
+	end
+end
+
 function InputHandler:_handleMoveSelection(coords)
+	if self.tutorialCallback then
+		self.tutorialCallback(coords)
+		return
+	end
+
 	local pieceAtClick = self.boardState[coords.y][coords.x]
 
 	if self.selectedSquare then
@@ -250,6 +265,7 @@ end
 	Selects a piece and shows its legal moves.
 ]=]
 function InputHandler:_selectPiece(coords)
+	self.selectionMode = "Move"
 	self.selectedSquare = coords
 	local legalMoves = {}
 

@@ -17,6 +17,7 @@ local DEFAULT_PROFILE = {
 	totalGames = 0,
 	totalWins = 0,
 	totalLosses = 0,
+	hasCompletedTutorial = false,
 }
 
 --[=[

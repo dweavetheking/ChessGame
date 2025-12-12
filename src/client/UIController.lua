@@ -144,12 +144,22 @@ function UIController:_createHUD()
 	self.profileButton.Text = "Profile"
 	self.profileButton.Parent = mainFrame
 
+	-- Help Button
+	self.helpButton = Instance.new("TextButton")
+	self.helpButton.Name = "HelpButton"
+	self.helpButton.Size = UDim2.new(0.1, 0, 0, 30)
+	self.helpButton.Position = UDim2.new(0.15, 0, 0.1, 0)
+	self.helpButton.Text = "Help"
+	self.helpButton.Parent = mainFrame
+
 
 	-- Magic Move Choice Modal
 	self:_createChoiceModal()
 	self:_createTypeSelectionModal()
 	self:_createEndGameModal()
 	self:_createProfilePanel()
+	self:_createWelcomeModal()
+	self:_createHelpPanel()
 end
 
 function UIController:_createMagicLabel(name: string, position: UDim2, align: string, parent: GuiObject)
@@ -354,7 +364,9 @@ end
 ]=]
 function UIController:showResult(result: table, localPlayerColor: string, oldElo: number, newElo: number)
 	local resultText = "Game Over"
-	if result.status:find("Draw") then
+	if result.status == "TutorialComplete" then
+		resultText = "Tutorial Complete!"
+	elseif result.status:find("Draw") then
 		resultText = "Draw!"
 	elseif result.winner == localPlayerColor then
 		resultText = "You Win!"
@@ -365,6 +377,167 @@ function UIController:showResult(result: table, localPlayerColor: string, oldElo
 	self.endGameModal.ResultText.Text = resultText
 	self.endGameModal.EloChangeText.Text = `Elo: {oldElo} → {newElo}`
 	self.endGameModal.Visible = true
+end
+
+function UIController:_createEndGameModal()
+	local modal = Instance.new("Frame")
+	modal.Name = "EndGameModal"
+	modal.Size = UDim2.new(0.5, 0, 0.4, 0)
+	modal.Position = UDim2.new(0.25, 0, 0.3, 0)
+	modal.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+	modal.BorderColor3 = Color3.fromRGB(255, 255, 255)
+	modal.BorderSizePixel = 2
+	modal.Visible = false
+	modal.Parent = self.screenGui
+	self.endGameModal = modal
+
+	local title = Instance.new("TextLabel")
+	title.Name = "ResultText"
+	title.Size = UDim2.new(1, 0, 0.4, 0)
+	title.Font = Enum.Font.SourceSansBold
+	title.TextColor3 = Color3.fromRGB(255, 255, 255)
+	title.TextSize = 48
+	title.Text = "You Win!"
+	title.Parent = modal
+
+	local eloChange = Instance.new("TextLabel")
+	eloChange.Name = "EloChangeText"
+	eloChange.Size = UDim2.new(1, 0, 0, 30)
+	eloChange.Position = UDim2.new(0, 0, 0.5, 0)
+	eloChange.Font = Enum.Font.SourceSans
+	eloChange.TextColor3 = Color3.fromRGB(200, 200, 200)
+	eloChange.Text = "Elo: 1200 -> 1215"
+	eloChange.Parent = modal
+	self.endGameModal.EloChangeText = eloChange
+
+	local backButton = Instance.new("TextButton")
+	backButton.Name = "BackButton"
+	backButton.Size = UDim2.new(0.6, 0, 0, 50)
+	backButton.Position = UDim2.new(0.2, 0, 0.7, 0)
+	backButton.Text = "Back to Lobby"
+	backButton.Parent = modal
+end
+
+function UIController:_createWelcomeModal()
+	local modal = Instance.new("Frame")
+	modal.Name = "WelcomeModal"
+	modal.Size = UDim2.new(0.6, 0, 0.5, 0)
+	modal.Position = UDim2.new(0.2, 0, 0.25, 0)
+	modal.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+	modal.BorderColor3 = Color3.fromRGB(255, 255, 255)
+	modal.BorderSizePixel = 2
+	modal.Visible = false
+	modal.Parent = self.screenGui
+	self.welcomeModal = modal
+
+	local title = Instance.new("TextLabel")
+	title.Name = "Title"
+	title.Size = UDim2.new(1, 0, 0.2, 0)
+	title.Text = "Welcome to MagicChess!"
+	title.Font = Enum.Font.SourceSansBold
+	title.TextSize = 36
+	title.Parent = modal
+
+	local desc = Instance.new("TextLabel")
+	desc.Name = "Description"
+	desc.Size = UDim2.new(0.9, 0, 0.4, 0)
+	desc.Position = UDim2.new(0.05, 0, 0.2, 0)
+	desc.Text = "Learn the basics of Magic Moves and climb the ranks in this unique twist on chess."
+	desc.TextWrapped = true
+	desc.Parent = modal
+
+	local startButton = Instance.new("TextButton")
+	startButton.Name = "StartButton"
+	startButton.Size = UDim2.new(0.5, 0, 0, 50)
+	startButton.Position = UDim2.new(0.25, 0, 0.75, 0)
+	startButton.Text = "Start Tutorial"
+	startButton.Parent = modal
+
+	-- Tutorial Banner
+	local banner = Instance.new("TextLabel")
+	banner.Name = "TutorialBanner"
+	banner.Size = UDim2.new(0.8, 0, 0, 60)
+	banner.Position = UDim2.new(0.1, 0, 0.05, 0)
+	banner.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+	banner.BackgroundTransparency = 0.4
+	banner.Font = Enum.Font.SourceSansBold
+	banner.TextSize = 24
+	banner.TextColor3 = Color3.fromRGB(255, 255, 255)
+	banner.TextWrapped = true
+	banner.Visible = false
+	banner.Parent = self.screenGui
+	self.tutorialBanner = banner
+end
+
+function UIController:showWelcomeModal(onStart: () -> ())
+	self.aiMatchButton.Visible = false
+	self.quickMatchButton.Visible = false
+	self.profileButton.Visible = false
+	self.helpButton.Visible = false
+	self.welcomeModal.Visible = true
+	self.welcomeModal.StartButton.MouseButton1Click:Connect(function()
+		self.welcomeModal.Visible = false
+		onStart()
+	end)
+end
+
+function UIController:showTutorialBanner(text: string)
+	self.tutorialBanner.Text = text
+	self.tutorialBanner.Visible = true
+end
+
+function UIController:_createHelpPanel()
+	local panel = Instance.new("Frame")
+	panel.Name = "HelpPanel"
+	panel.Size = UDim2.new(0.6, 0, 0.7, 0)
+	panel.Position = UDim2.new(0.2, 0, 0.15, 0)
+	panel.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+	panel.BorderColor3 = Color3.fromRGB(255, 255, 255)
+	panel.BorderSizePixel = 2
+	panel.Visible = false
+	panel.Parent = self.screenGui
+	self.helpPanel = panel
+
+	local title = Instance.new("TextLabel")
+	title.Name = "Title"
+	title.Size = UDim2.new(1, 0, 0, 40)
+	title.Text = "Magic Move Rules"
+	title.Parent = panel
+
+	local rules = Instance.new("TextLabel")
+	rules.Name = "Rules"
+	rules.Size = UDim2.new(0.9, 0, 0.7, 0)
+	rules.Position = UDim2.new(0.05, 0, 0.1, 0)
+	rules.Text = [[
+Upgrade:
+- Pawn -> Knight / Bishop / Rook
+- Knight -> Bishop / Rook
+- Bishop -> Rook
+
+Downgrade:
+- Rook -> Bishop / Knight
+- Bishop -> Knight / Pawn
+- Knight -> Pawn
+
+King and Queen cannot be changed.
+	]]
+	rules.TextWrapped = true
+	rules.TextXAlignment = Enum.TextXAlignment.Left
+	rules.Parent = panel
+
+	local closeButton = Instance.new("TextButton")
+	closeButton.Name = "CloseButton"
+	closeButton.Size = UDim2.new(0.3, 0, 0, 30)
+	closeButton.Position = UDim2.new(0.35, 0, 0.85, 0)
+	closeButton.Text = "Close"
+	closeButton.Parent = panel
+	closeButton.MouseButton1Click:Connect(function()
+		panel.Visible = false
+	end)
+
+	self.helpButton.MouseButton1Click:Connect(function()
+		panel.Visible = true
+	end)
 end
 
 function UIController:_createProfilePanel()
@@ -421,44 +594,6 @@ function UIController:_createProfilePanel()
 	end)
 end
 
-function UIController:_createEndGameModal()
-	local modal = Instance.new("Frame")
-	modal.Name = "EndGameModal"
-	modal.Size = UDim2.new(0.5, 0, 0.4, 0)
-	modal.Position = UDim2.new(0.25, 0, 0.3, 0)
-	modal.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-	modal.BorderColor3 = Color3.fromRGB(255, 255, 255)
-	modal.BorderSizePixel = 2
-	modal.Visible = false
-	modal.Parent = self.screenGui
-	self.endGameModal = modal
-
-	local title = Instance.new("TextLabel")
-	title.Name = "ResultText"
-	title.Size = UDim2.new(1, 0, 0.4, 0)
-	title.Font = Enum.Font.SourceSansBold
-	title.TextColor3 = Color3.fromRGB(255, 255, 25_5)
-	title.TextSize = 48
-	title.Text = "You Win!"
-	title.Parent = modal
-
-	local eloChange = Instance.new("TextLabel")
-	eloChange.Name = "EloChangeText"
-	eloChange.Size = UDim2.new(1, 0, 0, 30)
-	eloChange.Position = UDim2.new(0, 0, 0.5, 0)
-	eloChange.Font = Enum.Font.SourceSans
-	eloChange.TextColor3 = Color3.fromRGB(200, 200, 200)
-	eloChange.Text = "Elo: 1200 -> 1215"
-	eloChange.Parent = modal
-	self.endGameModal.EloChangeText = eloChange
-
-	local backButton = Instance.new("TextButton")
-	backButton.Name = "BackButton"
-	backButton.Size = UDim2.new(0.6, 0, 0, 50)
-	backButton.Position = UDim2.new(0.2, 0, 0.7, 0)
-	backButton.Text = "Back to Lobby"
-	backButton.Parent = modal
-end
 
 function UIController:showToast(message: string)
 	local toast = Instance.new("TextLabel")

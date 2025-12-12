@@ -33,6 +33,9 @@ Remotes.MatchStateUpdate = createRemote("MatchStateUpdate")
 Remotes.MatchEnd = createRemote("MatchEnd")
 Remotes.RequestQuickMatch = createRemote("RequestQuickMatch")
 Remotes.RequestAIMatch = createRemote("RequestAIMatch")
+Remotes.RequestTutorialMatch = createRemote("RequestTutorialMatch")
+Remotes.TutorialEnded = createRemote("TutorialEnded")
+Remotes.PlayerProfileLoaded = createRemote("PlayerProfileLoaded")
 
 -- A function to get the folder, primarily for the server to know where to find them
 function Remotes.getRemotesFolder()

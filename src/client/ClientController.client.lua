@@ -8,13 +8,14 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local StarterGui = game:GetService("StarterGui")
 
-local Client = script.Parent
+local Client = ReplicatedStorage.src.client
 local Shared = ReplicatedStorage.src.shared
 
 local BoardRenderer = require(Client.BoardRenderer)
 local InputHandler = require(Client.InputHandler)
 local UIController = require(Client.UIController)
 local CameraController = require(Client.CameraController)
+local TutorialController = require(Client.TutorialController)
 local Remotes = require(Shared.RemotesInit)
 local GameTypes = require(Shared.GameTypes)
 
@@ -41,20 +42,44 @@ end
 function ClientController.start()
 	print("ClientController started.")
 
-	-- Initial setup
+	local uiController = UIController.new()
+	activeModules.uiController = uiController
+
+	local function onProfileLoaded(profile)
+		if profile and not profile.hasCompletedTutorial then
+			local tutorial = TutorialController.new(uiController)
+			tutorial:start()
+		else
+			-- Normal lobby flow
+			print("Player has completed tutorial, showing normal lobby.")
+		end
+	end
+
+	Remotes.PlayerProfileLoaded.OnClientEvent:Connect(onProfileLoaded)
+
+	-- Initial button connections
+	uiController.aiMatchButton.MouseButton1Click:Connect(function()
+		Remotes.RequestAIMatch:FireServer()
+		ClientController.startMatch()
+	end)
+
+	uiController.quickMatchButton.MouseButton1Click:Connect(function()
+		Remotes.RequestQuickMatch:FireServer()
+		ClientController.startMatch()
+	end)
+end
+
+function ClientController.startMatch()
 	local boardAnchor = CFrame.new(0, 5, 0)
 	local themeName = math.random(1, 2) == 1 and "Classic" or "Magic"
 	local boardRenderer = BoardRenderer.new(boardAnchor, themeName)
-	local uiController = UIController.new()
+	local uiController = activeModules.uiController
 	local inputHandler = InputHandler.new(boardRenderer, uiController)
 	local cameraController = CameraController.new(boardAnchor)
 
-	activeModules = {
-		boardRenderer = boardRenderer,
-		uiController = uiController,
-		inputHandler = inputHandler,
-		cameraController = cameraController,
-	}
+	activeModules.boardRenderer = boardRenderer
+	activeModules.inputHandler = inputHandler
+	activeModules.cameraController = cameraController
 
 	local playerColor = nil
 	local lastMagicState = { whiteUsed = false, blackUsed = false }
@@ -66,18 +91,6 @@ function ClientController.start()
 	-- Connect UI events
 	uiController.resignButton.MouseButton1Click:Connect(function()
 		Remotes.ResignAttempt:FireServer()
-	end)
-
-	uiController.aiMatchButton.MouseButton1Click:Connect(function()
-		ClientController.destroyAll()
-		wait(0.5)
-		Remotes.RequestAIMatch:FireServer()
-	end)
-
-	uiController.quickMatchButton.MouseButton1Click:Connect(function()
-		ClientController.destroyAll()
-		wait(0.5)
-		Remotes.RequestQuickMatch:FireServer()
 	end)
 
 	uiController.endGameModal.BackButton.MouseButton1Click:Connect(function()
@@ -129,13 +142,8 @@ function ClientController.start()
 		onMatchEnd:Disconnect()
 		onMagicRejected:Disconnect()
 	end
-
-	-- For testing, immediately request a match
-	-- wait(2)
-	-- Remotes.RequestQuickMatch:FireServer()
 end
 
--- ClientController.start() -- Should be started from a lobby screen
 ClientController.start()
 
 return ClientController
