@@ -31,7 +31,8 @@ Remotes.MagicMoveRejected = createRemote("MagicMoveRejected")
 Remotes.ResignAttempt = createRemote("ResignAttempt")
 Remotes.MatchStateUpdate = createRemote("MatchStateUpdate")
 Remotes.MatchEnd = createRemote("MatchEnd")
-Remotes.RequestQuickMatch = createRemote("RequestQuickMatch") -- Added from original server spec
+Remotes.RequestQuickMatch = createRemote("RequestQuickMatch")
+Remotes.RequestAIMatch = createRemote("RequestAIMatch")
 
 -- A function to get the folder, primarily for the server to know where to find them
 function Remotes.getRemotesFolder()

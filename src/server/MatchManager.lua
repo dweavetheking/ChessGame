@@ -11,7 +11,9 @@ local Shared = ServerScriptService.src.shared
 local ChessEngine = require(Shared.ChessEngine)
 local GameTypes = require(Shared.GameTypes)
 local Remotes = require(Shared.RemotesInit)
-local MagicMoveSystem = require(Shared.MagicMoveSystem) -- Will be needed later
+local MagicMoveSystem = require(Shared.MagicMoveSystem)
+local AIPlayer = require(script.Parent.AIPlayer)
+local RatingSystem = require(script.Parent.RatingSystem)
 
 local MatchManager = {}
 MatchManager.__index = MatchManager
@@ -55,9 +57,38 @@ function MatchManager.createMatch(playerWhite: Player, playerBlack: Player): Mat
 		status = "InProgress",
 	}, MatchManager)
 
+	newMatch.isAI_Match = playerWhite.__isAI or playerBlack.__isAI
+
 	print(`Match created between {playerWhite.Name} (White) and {playerBlack.Name} (Black)`)
+
+	-- If AI is white, it needs to make the first move
+	if newMatch.players[newMatch.activeColor].__isAI then
+		newMatch:_processAITurn()
+	end
+
 	return newMatch
 end
+
+function MatchManager:_processAITurn()
+	task.wait(1) -- Simulate thinking time
+
+	local aiPlayer = self.players[self.activeColor]
+	if not aiPlayer or not aiPlayer.__isAI then
+		return
+	end
+
+	local move = AIPlayer.getBestMove(self.boardState, self.activeColor, aiPlayer.Elo, self.magicState, self.lastMove, self.previousBoardState)
+	if move then
+		if move.magic then
+			-- AI wants to use a magic move
+			self:handleMagicMove(aiPlayer, move.actionType, move.targetSquare, move.newType)
+		else
+			-- AI wants to make a normal move
+			self:handlePlayerMove(aiPlayer, move.from, move.to)
+		end
+	end
+end
+
 
 --[=[
 	Generates a serializable snapshot of the match state for clients.
@@ -75,6 +106,12 @@ function MatchManager:getSnapshot()
 			White = self.players.White.Name,
 			Black = self.players.Black.Name,
 		},
+		ratings = {
+			White = self.players.White.Elo or RatingSystem.getPlayerRating(self.players.White),
+			Black = self.players.Black.Elo or RatingSystem.getPlayerRating(self.players.Black),
+		},
+		aiProfile = self.isAI_Match and (self.players.White.__isAI and self.players.White.Name or self.players.Black.Name),
+		lastMove = self.lastMove,
 	}
 end
 
@@ -135,15 +172,20 @@ function MatchManager:handlePlayerMove(player: Player, fromSquare: { x: number, 
 	if ChessEngine.isCheckmate(self.boardState, self.activeColor) then
 		self.status = `{playerColor}Won`
 		print(`Checkmate! {playerColor} wins.`)
-		-- Fire MatchEnd remote
+		self:_updateElo(playerColor)
 	elseif ChessEngine.isStalemate(self.boardState, self.activeColor) then
 		self.status = "Draw"
 		print("Stalemate!")
-		-- Fire MatchEnd remote
+		self:_updateElo(nil) -- nil winner means draw
 	end
 
 	table.insert(self.moveHistory, { from = fromSquare, to = toSquare })
 	self:broadcastUpdate()
+
+	-- If the new active player is an AI, process their turn
+	if self.players[self.activeColor].__isAI then
+		self:_processAITurn()
+	end
 
 	return true
 end
@@ -196,11 +238,19 @@ function MatchManager:handleMagicMove(
 	-- Check for game end conditions after the magic move
 	if ChessEngine.isCheckmate(self.boardState, self.activeColor) then
 		self.status = `{playerColor}Won`
+		self:_updateElo(playerColor)
 	elseif ChessEngine.isStalemate(self.boardState, self.activeColor) then
 		self.status = "Draw"
+		self:_updateElo(nil)
 	end
 
 	self:broadcastUpdate()
+
+	-- If the new active player is an AI, process their turn
+	if self.players[self.activeColor].__isAI then
+		self:_processAITurn()
+	end
+
 	return true
 end
 
@@ -217,9 +267,37 @@ function MatchManager:handleResignation(player: Player)
 	local winnerColor = (playerColor == GameTypes.Colors.White) and GameTypes.Colors.Black or GameTypes.Colors.White
 	self.status = `{winnerColor}Won_Resign`
 	print(`{playerColor} resigned. {winnerColor} wins.`)
+	self:_updateElo(winnerColor)
 
 	self:broadcastUpdate()
 	-- Consider firing MatchEnd here as well
+end
+
+function MatchManager:_updateElo(winnerColor: string?)
+	if not self.isAI_Match then
+		return
+	end
+
+	local humanPlayer, aiPlayer = nil, nil
+	if self.players.White.__isAI then
+		aiPlayer = self.players.White
+		humanPlayer = self.players.Black
+	else
+		aiPlayer = self.players.Black
+		humanPlayer = self.players.White
+	end
+
+	local humanColor = self.playerIds[tostring(humanPlayer.UserId)]
+	local result
+	if not winnerColor then
+		result = 0.5 -- Draw
+	elseif winnerColor == humanColor then
+		result = 1 -- Human won
+	else
+		result = 0 -- AI won
+	end
+
+	RatingSystem.updateRating(humanPlayer, aiPlayer.Elo, result)
 end
 
 return MatchManager

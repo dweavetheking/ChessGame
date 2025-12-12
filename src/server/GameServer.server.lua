@@ -10,6 +10,7 @@ local Players = game:GetService("Players")
 local Shared = ServerScriptService.src.shared
 local Remotes = require(Shared.RemotesInit)
 local MatchManager = require(script.Parent.MatchManager)
+local RatingSystem = require(script.Parent.RatingSystem)
 
 local GameServer = {}
 
@@ -45,6 +46,30 @@ local function queuePlayer(player: Player)
 		-- Send the initial state
 		newMatch:broadcastUpdate()
 	end
+end
+
+local function startAIMatch(player: Player)
+	if activeMatches[player] then
+		warn(`Player {player.Name} is already in a match.`)
+		return
+	end
+
+	local playerRating = RatingSystem.getPlayerRating(player)
+	local aiProfile = RatingSystem.getAIOpponent(playerRating)
+
+	-- Create a fake AI player object for the match manager
+	local aiPlayer = {
+		Name = aiProfile.Name,
+		UserId = -1, -- Special ID for AI
+		__isAI = true,
+		Elo = aiProfile.Elo,
+	}
+
+	local newMatch = MatchManager.createMatch(player, aiPlayer)
+	activeMatches[player] = newMatch
+	activeMatches[aiPlayer] = newMatch -- So we can look up the match by AI object
+
+	newMatch:broadcastUpdate()
 end
 
 --[=[
@@ -113,6 +138,7 @@ end
 function GameServer.start()
 	print("GameServer started.")
 	Remotes.RequestQuickMatch.OnServerEvent:Connect(queuePlayer)
+	Remotes.RequestAIMatch.OnServerEvent:Connect(startAIMatch)
 	Remotes.MoveAttempt.OnServerEvent:Connect(onMoveAttempt)
 	Remotes.MagicMoveAttempt.OnServerEvent:Connect(onMagicMoveAttempt)
 	Remotes.ResignAttempt.OnServerEvent:Connect(onResignAttempt)

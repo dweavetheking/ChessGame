@@ -68,6 +68,18 @@ function ClientController.start()
 		Remotes.ResignAttempt:FireServer()
 	end)
 
+	uiController.aiMatchButton.MouseButton1Click:Connect(function()
+		ClientController.destroyAll()
+		wait(0.5)
+		Remotes.RequestAIMatch:FireServer()
+	end)
+
+	uiController.quickMatchButton.MouseButton1Click:Connect(function()
+		ClientController.destroyAll()
+		wait(0.5)
+		Remotes.RequestQuickMatch:FireServer()
+	end)
+
 	uiController.endGameModal.BackButton.MouseButton1Click:Connect(function()
 		ClientController.destroyAll()
 		-- In a real app, you'd show a lobby UI. For now, we'll re-queue.
@@ -119,10 +131,11 @@ function ClientController.start()
 	end
 
 	-- For testing, immediately request a match
-	wait(2)
-	Remotes.RequestQuickMatch:FireServer()
+	-- wait(2)
+	-- Remotes.RequestQuickMatch:FireServer()
 end
 
+-- ClientController.start() -- Should be started from a lobby screen
 ClientController.start()
 
 return ClientController

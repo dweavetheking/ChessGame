@@ -113,6 +113,28 @@ function UIController:_createHUD()
 	self.resignButton.Text = "Resign"
 	self.resignButton.Parent = mainFrame
 
+	-- AI Match Button
+	self.aiMatchButton = Instance.new("TextButton")
+	self.aiMatchButton.Name = "AIMatchButton"
+	self.aiMatchButton.Size = UDim2.new(0.15, 0, 0, 30)
+	self.aiMatchButton.Position = UDim2.new(0.7, 0, 0.1, 0)
+	self.aiMatchButton.BackgroundColor3 = Color3.fromRGB(30, 150, 30)
+	self.aiMatchButton.Font = Enum.Font.SourceSansBold
+	self.aiMatchButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	self.aiMatchButton.Text = "Play vs AI"
+	self.aiMatchButton.Parent = mainFrame
+
+	-- Quick Match Button
+	self.quickMatchButton = Instance.new("TextButton")
+	self.quickMatchButton.Name = "QuickMatchButton"
+	self.quickMatchButton.Size = UDim2.new(0.15, 0, 0, 30)
+	self.quickMatchButton.Position = UDim2.new(0.5, 0, 0.1, 0)
+	self.quickMatchButton.BackgroundColor3 = Color3.fromRGB(30, 30, 150)
+	self.quickMatchButton.Font = Enum.Font.SourceSansBold
+	self.quickMatchButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	self.quickMatchButton.Text = "Quick Match"
+	self.quickMatchButton.Parent = mainFrame
+
 
 	-- Magic Move Choice Modal
 	self:_createChoiceModal()
@@ -225,9 +247,9 @@ end
 	@param localPlayerColor The color of the local player.
 ]=]
 function UIController:update(snapshot: table, localPlayerColor: string)
-	-- Update player names
-	self.whitePlayerLabel.Text = `White: {snapshot.players.White}`
-	self.blackPlayerLabel.Text = `Black: {snapshot.players.Black}`
+	-- Update player names and ratings
+	self.whitePlayerLabel.Text = `White: {snapshot.players.White} ({snapshot.ratings.White})`
+	self.blackPlayerLabel.Text = `Black: {snapshot.players.Black} ({snapshot.ratings.Black})`
 
 	-- Update turn indicator and Magic Move button visibility
 	local isMyTurn = snapshot.activeColor == localPlayerColor
@@ -238,7 +260,11 @@ function UIController:update(snapshot: table, localPlayerColor: string)
 		self.turnIndicator.Text = "Your Turn"
 		self.turnIndicator.TextColor3 = Color3.fromRGB(0, 255, 0)
 	else
-		self.turnIndicator.Text = "Opponent's Turn"
+		if snapshot.aiProfile then
+			self.turnIndicator.Text = "AI is thinking..."
+		else
+			self.turnIndicator.Text = "Opponent's Turn"
+		end
 		self.turnIndicator.TextColor3 = Color3.fromRGB(255, 255, 0)
 	end
 
