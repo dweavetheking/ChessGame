@@ -101,10 +101,22 @@ function MatchManager:handlePlayerMove(player: Player, fromSquare: { x: number, 
 		return false, "Not your turn"
 	end
 
+	local pieceToMove = self.boardState[fromSquare.y][fromSquare.x]
+	if not pieceToMove then
+		return false, "No piece at source square"
+	end
+
 	local isLegal, reason = ChessEngine.isMoveLegal(self.boardState, fromSquare, toSquare, self.activeColor)
 	if not isLegal then
 		return false, reason or "Illegal move"
 	end
+
+	-- Record last move for magic move system
+	self.lastMove = {
+		pieceId = pieceToMove.id,
+		fromSquare = fromSquare,
+		toSquare = toSquare,
+	}
 
 	-- Apply the move
 	local newBoard, _, _ = ChessEngine.applyMove(self.boardState, fromSquare, toSquare)
@@ -130,11 +142,59 @@ function MatchManager:handlePlayerMove(player: Player, fromSquare: { x: number, 
 	return true
 end
 
--- Placeholder for magic move
-function MatchManager:handleMagicMove(...)
-	-- To be implemented
-	warn("handleMagicMove not implemented yet")
-	return false, "Not implemented"
+
+function MatchManager:handleMagicMove(
+	player: Player,
+	actionType: string,
+	targetSquare: { x: number, y: number },
+	newType: string
+)
+	local playerColor = self.playerIds[tostring(player.UserId)]
+	if not playerColor or playerColor ~= self.activeColor then
+		return false, "Not your turn"
+	end
+
+	-- Check if magic move has been used
+	if (playerColor == GameTypes.Colors.White and self.magicState.whiteUsed) or (playerColor == GameTypes.Colors.Black and self.magicState.blackUsed) then
+		return false, "Magic Move already used"
+	end
+
+	local success, reason, newBoard = MagicMoveSystem.applyMagicMove(
+		self.boardState,
+		actionType,
+		targetSquare,
+		newType,
+		playerColor,
+		self.lastMove
+	)
+
+	if not success then
+		-- Fire a remote to tell the client it failed
+		Remotes.MagicMoveRejected:FireClient(player, reason)
+		return false, reason
+	end
+
+	-- Mark as used
+	if playerColor == GameTypes.Colors.White then
+		self.magicState.whiteUsed = true
+	else
+		self.magicState.blackUsed = true
+	end
+
+	self.boardState = newBoard
+
+	-- Swap active color
+	self.activeColor = (self.activeColor == GameTypes.Colors.White) and GameTypes.Colors.Black or GameTypes.Colors.White
+
+	-- Check for game end conditions after the magic move
+	if ChessEngine.isCheckmate(self.boardState, self.activeColor) then
+		self.status = `{playerColor}Won`
+	elseif ChessEngine.isStalemate(self.boardState, self.activeColor) then
+		self.status = "Draw"
+	end
+
+	self:broadcastUpdate()
+	return true
 end
 
 return MatchManager

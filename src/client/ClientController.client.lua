@@ -30,8 +30,8 @@ function ClientController.start()
 	-- Initial setup
 	local boardAnchor = CFrame.new(0, 5, 0) -- Example position, can be adjusted
 	local boardRenderer = BoardRenderer.new(boardAnchor)
-	local inputHandler = InputHandler.new(boardRenderer)
 	local uiController = UIController.new()
+	local inputHandler = InputHandler.new(boardRenderer, uiController)
 
 	local playerColor = nil -- Determined at the start of a match
 
@@ -69,6 +69,11 @@ function ClientController.start()
 		print("Match ended. Result:", result)
 		inputHandler:disable()
 		uiController:showResult(result, playerColor)
+	end)
+
+	Remotes.MagicMoveRejected.OnClientEvent:Connect(function(reason: string)
+		print("Magic Move Rejected:", reason)
+		uiController:showToast("Magic Move Rejected: " .. reason)
 	end)
 
 

@@ -9,7 +9,9 @@ local Workspace = game:GetService("Workspace")
 local TweenService = game:GetService("TweenService")
 
 local Shared = ReplicatedStorage.src.shared
+local Client = ReplicatedStorage.src.client
 local GameTypes = require(Shared.GameTypes)
+local SoundManager = require(Client.SoundManager)
 
 local BoardRenderer = {}
 BoardRenderer.__index = BoardRenderer
@@ -179,6 +181,26 @@ function BoardRenderer:_animateCapture(pieceModel: Part)
 	pieceModel:Destroy()
 end
 
+function BoardRenderer:animateMagicTransformation(pieceModel: Part)
+	-- Simple glow and pulse effect
+	local originalColor = pieceModel.Color
+	local highlight = Instance.new("PointLight")
+	highlight.Color = Color3.fromRGB(0, 255, 255)
+	highlight.Brightness = 5
+	highlight.Range = 12
+	highlight.Parent = pieceModel
+
+	SoundManager.playMagicMoveSound()
+
+	local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out, 0, true)
+	local scaleTween = TweenService:Create(pieceModel, tweenInfo, { Size = pieceModel.Size * 1.5 })
+
+	scaleTween:Play()
+	scaleTween.Completed:Wait()
+
+	highlight:Destroy()
+end
+
 --[=[
 	Renders the entire board state from a snapshot, animating changes.
 	@param boardState table The 8x8 grid of piece data.
@@ -196,13 +218,24 @@ function BoardRenderer:drawBoard(boardState: ChessEngine.BoardState)
 				local existingPiece = self.activePieces[pieceData.id]
 
 				if existingPiece then
-					-- Piece exists, check if it needs to move
-					local newCFrame = self:_getPieceCFrame(x, y, existingPiece.Size)
-					if (existingPiece.CFrame.Position - newCFrame.Position).Magnitude > 0.1 then
-						table.insert(piecesToMove, { model = existingPiece, cframe = newCFrame })
+					-- Piece exists, check for changes
+					if not existingPiece.Name:match(pieceData.pieceType) then
+						-- Piece type changed! Magic Move occurred.
+						self:animateMagicTransformation(existingPiece)
+						existingPiece:Destroy()
+						self.activePieces[pieceData.id] = nil -- Force recreation
+						existingPiece = nil -- Redefine to trigger creation below
+					else
+						-- Type is the same, check if it needs to move
+						local newCFrame = self:_getPieceCFrame(x, y, existingPiece.Size)
+						if (existingPiece.CFrame.Position - newCFrame.Position).Magnitude > 0.1 then
+							table.insert(piecesToMove, { model = existingPiece, cframe = newCFrame })
+						end
 					end
-				else
-					-- Piece is new (e.g., first spawn)
+				end
+
+				if not existingPiece then
+					-- Piece is new or was just transformed
 					local template = self.pieceModels[pieceData.pieceType]
 					if template then
 						local newPiece = template:Clone()

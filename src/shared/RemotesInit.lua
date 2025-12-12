@@ -27,6 +27,7 @@ end
 -- Define and create all remotes
 Remotes.MoveAttempt = createRemote("MoveAttempt")
 Remotes.MagicMoveAttempt = createRemote("MagicMoveAttempt")
+Remotes.MagicMoveRejected = createRemote("MagicMoveRejected")
 Remotes.MatchStateUpdate = createRemote("MatchStateUpdate")
 Remotes.MatchEnd = createRemote("MatchEnd")
 Remotes.RequestQuickMatch = createRemote("RequestQuickMatch") -- Added from original server spec
