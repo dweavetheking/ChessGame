@@ -117,7 +117,7 @@ function ClientController.start()
 
 	local onMatchEnd = Remotes.MatchEnd.OnClientEvent:Connect(function(result: table)
 		inputHandler:disable()
-		uiController:showResult(result, playerColor)
+		uiController:showResult(result, playerColor, result.oldElo, result.newElo)
 	end)
 
 	local onMagicRejected = Remotes.MagicMoveRejected.OnClientEvent:Connect(function(reason: string)

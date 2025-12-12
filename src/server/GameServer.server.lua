@@ -11,6 +11,7 @@ local Shared = ServerScriptService.src.shared
 local Remotes = require(Shared.RemotesInit)
 local MatchManager = require(script.Parent.MatchManager)
 local RatingSystem = require(script.Parent.RatingSystem)
+local ProfileStore = require(script.Parent.ProfileStore)
 
 local GameServer = {}
 
@@ -121,11 +122,24 @@ local function onPlayerRemoving(player: Player)
 	-- End any active match
 	local match = activeMatches[player]
 	if match then
-		-- For MVP, the other player wins
-		local winner = (match.players.White == player) and match.players.Black or match.players.White
-		match.status = `{winner.Name}Won_Disconnect`
-		print(`Player {player.Name} disconnected. Match ended.`)
-		match:broadcastUpdate() -- Notify the other player
+		if match.isAI_Match then
+			-- If it's an AI match, the human player loses
+			local humanPlayer = (match.players.White == player) and player or match.players.Black
+			local aiPlayer = (match.players.White == player) and match.players.Black or match.players.White
+			RatingSystem.updateRating(humanPlayer, aiPlayer.Elo, 0) -- 0 for a loss
+			local profile = ProfileStore.getProfile(humanPlayer)
+			if profile then
+				profile.totalGames = (profile.totalGames or 0) + 1
+				profile.totalLosses = (profile.totalLosses or 0) + 1
+			end
+			ProfileStore.saveProfile(humanPlayer)
+		else
+			-- For MVP, the other player wins in a PvP match
+			local winner = (match.players.White == player) and match.players.Black or match.players.White
+			match.status = `{winner.Name}Won_Disconnect`
+			print(`Player {player.Name} disconnected. Match ended.`)
+			match:broadcastUpdate() -- Notify the other player
+		end
 
 		-- Clean up
 		activeMatches[match.players.White] = nil

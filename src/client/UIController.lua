@@ -10,6 +10,7 @@ local StarterGui = game:GetService("StarterGui")
 
 local Shared = ReplicatedStorage.src.shared
 local GameTypes = require(Shared.GameTypes)
+local RankConfig = require(Shared.RankConfig)
 
 local UIController = {}
 UIController.__index = UIController
@@ -135,11 +136,20 @@ function UIController:_createHUD()
 	self.quickMatchButton.Text = "Quick Match"
 	self.quickMatchButton.Parent = mainFrame
 
+	-- Profile Button
+	self.profileButton = Instance.new("TextButton")
+	self.profileButton.Name = "ProfileButton"
+	self.profileButton.Size = UDim2.new(0.1, 0, 0, 30)
+	self.profileButton.Position = UDim2.new(0.02, 0, 0.1, 0)
+	self.profileButton.Text = "Profile"
+	self.profileButton.Parent = mainFrame
+
 
 	-- Magic Move Choice Modal
 	self:_createChoiceModal()
 	self:_createTypeSelectionModal()
 	self:_createEndGameModal()
+	self:_createProfilePanel()
 end
 
 function UIController:_createMagicLabel(name: string, position: UDim2, align: string, parent: GuiObject)
@@ -248,8 +258,10 @@ end
 ]=]
 function UIController:update(snapshot: table, localPlayerColor: string)
 	-- Update player names and ratings
-	self.whitePlayerLabel.Text = `White: {snapshot.players.White} ({snapshot.ratings.White})`
-	self.blackPlayerLabel.Text = `Black: {snapshot.players.Black} ({snapshot.ratings.Black})`
+	local whiteProfile = snapshot.profiles.White
+	local blackProfile = snapshot.profiles.Black
+	self.whitePlayerLabel.Text = `White: {snapshot.players.White} ({whiteProfile.elo} {whiteProfile.tier.Name})`
+	self.blackPlayerLabel.Text = `Black: {snapshot.players.Black} ({blackProfile.elo} {blackProfile.tier.Name})`
 
 	-- Update turn indicator and Magic Move button visibility
 	local isMyTurn = snapshot.activeColor == localPlayerColor
@@ -283,6 +295,14 @@ function UIController:update(snapshot: table, localPlayerColor: string)
 
 	-- Show check indicator
 	self.checkIndicator.Visible = snapshot.isCheck
+
+	-- Update profile panel
+	local myProfile = (localPlayerColor == GameTypes.Colors.White) and whiteProfile or blackProfile
+	if myProfile then
+		self.profileEloLabel.Text = `Elo: {myProfile.elo}`
+		self.profileTierLabel.Text = `Tier: {myProfile.tier.Name}`
+		self.profileStatsLabel.Text = `W/L: {myProfile.totalWins or 0} / {myProfile.totalLosses or 0}`
+	end
 end
 
 function UIController:showChoiceModal(show: boolean)
@@ -332,7 +352,7 @@ end
 --[=[
 	Shows the end-of-game result screen.
 ]=]
-function UIController:showResult(result: table, localPlayerColor: string)
+function UIController:showResult(result: table, localPlayerColor: string, oldElo: number, newElo: number)
 	local resultText = "Game Over"
 	if result.status:find("Draw") then
 		resultText = "Draw!"
@@ -343,7 +363,62 @@ function UIController:showResult(result: table, localPlayerColor: string)
 	end
 
 	self.endGameModal.ResultText.Text = resultText
+	self.endGameModal.EloChangeText.Text = `Elo: {oldElo} → {newElo}`
 	self.endGameModal.Visible = true
+end
+
+function UIController:_createProfilePanel()
+	local panel = Instance.new("Frame")
+	panel.Name = "ProfilePanel"
+	panel.Size = UDim2.new(0.3, 0, 0.5, 0)
+	panel.Position = UDim2.new(0.35, 0, 0.25, 0)
+	panel.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+	panel.BorderColor3 = Color3.fromRGB(255, 255, 255)
+	panel.BorderSizePixel = 2
+	panel.Visible = false
+	panel.Parent = self.screenGui
+	self.profilePanel = panel
+
+	local title = Instance.new("TextLabel")
+	title.Name = "Title"
+	title.Size = UDim2.new(1, 0, 0, 40)
+	title.Text = "Player Profile"
+	title.Parent = panel
+
+	local eloLabel = Instance.new("TextLabel")
+	eloLabel.Name = "EloLabel"
+	eloLabel.Size = UDim2.new(1, 0, 0, 30)
+	eloLabel.Position = UDim2.new(0, 0, 0.2, 0)
+	eloLabel.Parent = panel
+	self.profileEloLabel = eloLabel
+
+	local tierLabel = Instance.new("TextLabel")
+	tierLabel.Name = "TierLabel"
+	tierLabel.Size = UDim2.new(1, 0, 0, 30)
+	tierLabel.Position = UDim2.new(0, 0, 0.3, 0)
+	tierLabel.Parent = panel
+	self.profileTierLabel = tierLabel
+
+	local statsLabel = Instance.new("TextLabel")
+	statsLabel.Name = "StatsLabel"
+	statsLabel.Size = UDim2.new(1, 0, 0, 30)
+	statsLabel.Position = UDim2.new(0, 0, 0.4, 0)
+	statsLabel.Parent = panel
+	self.profileStatsLabel = statsLabel
+
+	local closeButton = Instance.new("TextButton")
+	closeButton.Name = "CloseButton"
+	closeButton.Size = UDim2.new(0.3, 0, 0, 30)
+	closeButton.Position = UDim2.new(0.35, 0, 0.8, 0)
+	closeButton.Text = "Close"
+	closeButton.Parent = panel
+	closeButton.MouseButton1Click:Connect(function()
+		panel.Visible = false
+	end)
+
+	self.profileButton.MouseButton1Click:Connect(function()
+		panel.Visible = true
+	end)
 end
 
 function UIController:_createEndGameModal()
@@ -366,6 +441,16 @@ function UIController:_createEndGameModal()
 	title.TextSize = 48
 	title.Text = "You Win!"
 	title.Parent = modal
+
+	local eloChange = Instance.new("TextLabel")
+	eloChange.Name = "EloChangeText"
+	eloChange.Size = UDim2.new(1, 0, 0, 30)
+	eloChange.Position = UDim2.new(0, 0, 0.5, 0)
+	eloChange.Font = Enum.Font.SourceSans
+	eloChange.TextColor3 = Color3.fromRGB(200, 200, 200)
+	eloChange.Text = "Elo: 1200 -> 1215"
+	eloChange.Parent = modal
+	self.endGameModal.EloChangeText = eloChange
 
 	local backButton = Instance.new("TextButton")
 	backButton.Name = "BackButton"

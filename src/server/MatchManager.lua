@@ -14,6 +14,8 @@ local Remotes = require(Shared.RemotesInit)
 local MagicMoveSystem = require(Shared.MagicMoveSystem)
 local AIPlayer = require(script.Parent.AIPlayer)
 local RatingSystem = require(script.Parent.RatingSystem)
+local ProfileStore = require(script.Parent.ProfileStore)
+local RankConfig = require(Shared.RankConfig)
 
 local MatchManager = {}
 MatchManager.__index = MatchManager
@@ -106,9 +108,9 @@ function MatchManager:getSnapshot()
 			White = self.players.White.Name,
 			Black = self.players.Black.Name,
 		},
-		ratings = {
-			White = self.players.White.Elo or RatingSystem.getPlayerRating(self.players.White),
-			Black = self.players.Black.Elo or RatingSystem.getPlayerRating(self.players.Black),
+		profiles = {
+			White = self.players.White.__isAI and { elo = self.players.White.Elo, tier = RankConfig.getTierForRating(self.players.White.Elo) } or ProfileStore.getProfile(self.players.White),
+			Black = self.players.Black.__isAI and { elo = self.players.Black.Elo, tier = RankConfig.getTierForRating(self.players.Black.Elo) } or ProfileStore.getProfile(self.players.Black),
 		},
 		aiProfile = self.isAI_Match and (self.players.White.__isAI and self.players.White.Name or self.players.Black.Name),
 		lastMove = self.lastMove,
@@ -172,11 +174,14 @@ function MatchManager:handlePlayerMove(player: Player, fromSquare: { x: number, 
 	if ChessEngine.isCheckmate(self.boardState, self.activeColor) then
 		self.status = `{playerColor}Won`
 		print(`Checkmate! {playerColor} wins.`)
-		self:_updateElo(playerColor)
+		local oldElo, newElo = self:_updateElo(playerColor)
+		Remotes.MatchEnd:FireClient(self.players[playerColor], { winner = playerColor, status = self.status, oldElo = oldElo, newElo = newElo })
 	elseif ChessEngine.isStalemate(self.boardState, self.activeColor) then
 		self.status = "Draw"
 		print("Stalemate!")
-		self:_updateElo(nil) -- nil winner means draw
+		local oldElo, newElo = self:_updateElo(nil) -- nil winner means draw
+		Remotes.MatchEnd:FireClient(self.players.White, { winner = nil, status = self.status, oldElo = oldElo, newElo = newElo })
+		Remotes.MatchEnd:FireClient(self.players.Black, { winner = nil, status = self.status, oldElo = oldElo, newElo = newElo })
 	end
 
 	table.insert(self.moveHistory, { from = fromSquare, to = toSquare })
@@ -238,10 +243,13 @@ function MatchManager:handleMagicMove(
 	-- Check for game end conditions after the magic move
 	if ChessEngine.isCheckmate(self.boardState, self.activeColor) then
 		self.status = `{playerColor}Won`
-		self:_updateElo(playerColor)
+		local oldElo, newElo = self:_updateElo(playerColor)
+		Remotes.MatchEnd:FireClient(self.players[playerColor], { winner = playerColor, status = self.status, oldElo = oldElo, newElo = newElo })
 	elseif ChessEngine.isStalemate(self.boardState, self.activeColor) then
 		self.status = "Draw"
-		self:_updateElo(nil)
+		local oldElo, newElo = self:_updateElo(nil)
+		Remotes.MatchEnd:FireClient(self.players.White, { winner = nil, status = self.status, oldElo = oldElo, newElo = newElo })
+		Remotes.MatchEnd:FireClient(self.players.Black, { winner = nil, status = self.status, oldElo = oldElo, newElo = newElo })
 	end
 
 	self:broadcastUpdate()
@@ -267,10 +275,11 @@ function MatchManager:handleResignation(player: Player)
 	local winnerColor = (playerColor == GameTypes.Colors.White) and GameTypes.Colors.Black or GameTypes.Colors.White
 	self.status = `{winnerColor}Won_Resign`
 	print(`{playerColor} resigned. {winnerColor} wins.`)
-	self:_updateElo(winnerColor)
+	local oldElo, newElo = self:_updateElo(winnerColor)
 
 	self:broadcastUpdate()
-	-- Consider firing MatchEnd here as well
+	Remotes.MatchEnd:FireClient(self.players[winnerColor], { winner = winnerColor, status = self.status, oldElo = oldElo, newElo = newElo })
+	Remotes.MatchEnd:FireClient(player, { winner = winnerColor, status = self.status, oldElo = oldElo, newElo = newElo })
 end
 
 function MatchManager:_updateElo(winnerColor: string?)
@@ -297,7 +306,18 @@ function MatchManager:_updateElo(winnerColor: string?)
 		result = 0 -- AI won
 	end
 
-	RatingSystem.updateRating(humanPlayer, aiPlayer.Elo, result)
+	local oldRating = RatingSystem.getPlayerRating(humanPlayer)
+	local newRating = RatingSystem.updateRating(humanPlayer, aiPlayer.Elo, result)
+	local profile = ProfileStore.getProfile(humanPlayer)
+	if profile then
+		profile.totalGames = (profile.totalGames or 0) + 1
+		if result == 1 then
+			profile.totalWins = (profile.totalWins or 0) + 1
+		elseif result == 0 then
+			profile.totalLosses = (profile.totalLosses or 0) + 1
+		end
+	end
+	return oldRating, newRating
 end
 
 return MatchManager

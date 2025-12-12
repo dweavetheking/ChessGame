@@ -4,13 +4,11 @@
 	@module RatingSystem
 ]=]
 
+local ProfileStore = require(script.Parent.ProfileStore)
+
 local RatingSystem = {}
 
 local K_FACTOR = 32
-local DEFAULT_RATING = 1200
-
--- In-memory storage for player ratings. Can be replaced with DataStore later.
-local playerRatings = {} -- [Player.UserId: string] = number
 
 RatingSystem.AIProfiles = {
 	{ Name = "Beginner", Elo = 800 },
@@ -25,7 +23,8 @@ RatingSystem.AIProfiles = {
 	@return number
 ]=]
 function RatingSystem.getPlayerRating(player: Player): number
-	return playerRatings[tostring(player.UserId)] or DEFAULT_RATING
+	local profile = ProfileStore.getProfile(player)
+	return profile and profile.elo or 1200
 end
 
 --[=[
@@ -34,8 +33,11 @@ end
 	@param rating
 ]=]
 function RatingSystem.setPlayerRating(player: Player, rating: number)
-	playerRatings[tostring(player.UserId)] = rating
-	print(`Rating for {player.Name} set to {rating}`)
+	local profile = ProfileStore.getProfile(player)
+	if profile then
+		profile.elo = rating
+		print(`Rating for {player.Name} set to {rating}`)
+	end
 end
 
 --[=[
