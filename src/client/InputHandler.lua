@@ -312,6 +312,8 @@ function InputHandler:destroy()
 		conn:Disconnect()
 	end
 	table.clear(self.connections)
+	self.boardRenderer = nil
+	self.uiController = nil
 end
 
 return InputHandler

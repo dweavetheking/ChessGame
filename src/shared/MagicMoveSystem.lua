@@ -107,7 +107,8 @@ function MagicMoveSystem.applyMagicMove(
 	square: { x: number, y: number },
 	newType: string,
 	color: string,
-	lastMove: table?
+	lastMove: table?,
+	previousBoardState: ChessEngine.BoardState?
 )
 	local pieceToChange = boardState[square.y][square.x]
 	if not pieceToChange then
@@ -152,11 +153,17 @@ function MagicMoveSystem.applyMagicMove(
 		and lastMove
 		and lastMove.pieceId == pieceToChange.id
 		and (lastMove.toSquare.x == square.x and lastMove.toSquare.y == square.y)
+		and previousBoardState
 	then
 		-- The downgraded piece was the one that just moved.
 		-- Check if its new, downgraded type could have made that move.
+		local tempPiece = table.clone(changedPiece)
+		tempPiece.pieceType = newType
+		local boardWithoutLastMove = ChessEngine.cloneBoard(previousBoardState)
+		boardWithoutLastMove[lastMove.fromSquare.y][lastMove.fromSquare.x] = tempPiece
+
 		local couldHaveMadeLastMove, _ = ChessEngine.isMoveLegal(
-			boardState, -- Check on the board state BEFORE the last move
+			boardWithoutLastMove,
 			lastMove.fromSquare,
 			lastMove.toSquare,
 			changedPiece.color

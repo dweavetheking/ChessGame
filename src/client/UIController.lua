@@ -90,9 +90,34 @@ function UIController:_createHUD()
 	self.magicMoveButton.Visible = false -- Hidden by default
 	self.magicMoveButton.Parent = mainFrame
 
+	-- Check Indicator
+	self.checkIndicator = Instance.new("TextLabel")
+	self.checkIndicator.Name = "CheckIndicator"
+	self.checkIndicator.Size = UDim2.new(0.2, 0, 0, 30)
+	self.checkIndicator.Position = UDim2.new(0.4, 0, 0.7, 0)
+	self.checkIndicator.Font = Enum.Font.SourceSansBold
+	self.checkIndicator.TextColor3 = Color3.fromRGB(255, 0, 0)
+	self.checkIndicator.Text = "CHECK!"
+	self.checkIndicator.Visible = false
+	self.checkIndicator.BackgroundTransparency = 1
+	self.checkIndicator.Parent = mainFrame
+
+	-- Resign Button
+	self.resignButton = Instance.new("TextButton")
+	self.resignButton.Name = "ResignButton"
+	self.resignButton.Size = UDim2.new(0.1, 0, 0, 30)
+	self.resignButton.Position = UDim2.new(0.88, 0, 0.1, 0)
+	self.resignButton.BackgroundColor3 = Color3.fromRGB(150, 30, 30)
+	self.resignButton.Font = Enum.Font.SourceSansBold
+	self.resignButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	self.resignButton.Text = "Resign"
+	self.resignButton.Parent = mainFrame
+
+
 	-- Magic Move Choice Modal
 	self:_createChoiceModal()
 	self:_createTypeSelectionModal()
+	self:_createEndGameModal()
 end
 
 function UIController:_createMagicLabel(name: string, position: UDim2, align: string, parent: GuiObject)
@@ -229,6 +254,9 @@ function UIController:update(snapshot: table, localPlayerColor: string)
 	-- Show Magic Move button if it's our turn and we haven't used it
 	local myColorIsWhite = localPlayerColor == GameTypes.Colors.White
 	self.magicMoveButton.Visible = isMyTurn and ((myColorIsWhite and not whiteUsed) or (not myColorIsWhite and not blackUsed))
+
+	-- Show check indicator
+	self.checkIndicator.Visible = snapshot.isCheck
 end
 
 function UIController:showChoiceModal(show: boolean)
@@ -279,18 +307,46 @@ end
 	Shows the end-of-game result screen.
 ]=]
 function UIController:showResult(result: table, localPlayerColor: string)
-	-- For MVP, just update the turn indicator text
 	local resultText = "Game Over"
-	if result.status == "Draw" then
+	if result.status:find("Draw") then
 		resultText = "Draw!"
 	elseif result.winner == localPlayerColor then
 		resultText = "You Win!"
-		self.turnIndicator.TextColor3 = Color3.fromRGB(0, 255, 0)
 	else
 		resultText = "You Lose!"
-		self.turnIndicator.TextColor3 = Color3.fromRGB(255, 50, 50)
 	end
-	self.turnIndicator.Text = resultText
+
+	self.endGameModal.ResultText.Text = resultText
+	self.endGameModal.Visible = true
+end
+
+function UIController:_createEndGameModal()
+	local modal = Instance.new("Frame")
+	modal.Name = "EndGameModal"
+	modal.Size = UDim2.new(0.5, 0, 0.4, 0)
+	modal.Position = UDim2.new(0.25, 0, 0.3, 0)
+	modal.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+	modal.BorderColor3 = Color3.fromRGB(255, 255, 255)
+	modal.BorderSizePixel = 2
+	modal.Visible = false
+	modal.Parent = self.screenGui
+	self.endGameModal = modal
+
+	local title = Instance.new("TextLabel")
+	title.Name = "ResultText"
+	title.Size = UDim2.new(1, 0, 0.4, 0)
+	title.Font = Enum.Font.SourceSansBold
+	title.TextColor3 = Color3.fromRGB(255, 255, 25_5)
+	title.TextSize = 48
+	title.Text = "You Win!"
+	title.Parent = modal
+
+	local backButton = Instance.new("TextButton")
+	backButton.Name = "BackButton"
+	backButton.Size = UDim2.new(0.6, 0, 0, 50)
+	backButton.Position = UDim2.new(0.2, 0, 0.7, 0)
+	backButton.Text = "Back to Lobby"
+	backButton.Parent = modal
 end
 
 function UIController:showToast(message: string)
@@ -321,6 +377,7 @@ function UIController:destroy()
 	if self.screenGui then
 		self.screenGui:Destroy()
 	end
+	self.screenGui = nil
 end
 
 return UIController

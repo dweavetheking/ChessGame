@@ -14,12 +14,26 @@ local Shared = ReplicatedStorage.src.shared
 local BoardRenderer = require(Client.BoardRenderer)
 local InputHandler = require(Client.InputHandler)
 local UIController = require(Client.UIController)
+local CameraController = require(Client.CameraController)
 local Remotes = require(Shared.RemotesInit)
 local GameTypes = require(Shared.GameTypes)
 
 local ClientController = {}
 
 local localPlayer = Players.LocalPlayer
+local activeModules = {}
+
+function ClientController.destroyAll()
+	for name, module in pairs(activeModules) do
+		if module and module.destroy then
+			module:destroy()
+		end
+		activeModules[name] = nil
+	end
+	table.clear(activeModules)
+	-- Show the main lobby UI again, for now just re-enable CoreGui
+	StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, true)
+end
 
 --[=[
 	Main entry point for the client.
@@ -28,63 +42,86 @@ function ClientController.start()
 	print("ClientController started.")
 
 	-- Initial setup
-	local boardAnchor = CFrame.new(0, 5, 0) -- Example position, can be adjusted
-	local boardRenderer = BoardRenderer.new(boardAnchor)
+	local boardAnchor = CFrame.new(0, 5, 0)
+	local themeName = math.random(1, 2) == 1 and "Classic" or "Magic"
+	local boardRenderer = BoardRenderer.new(boardAnchor, themeName)
 	local uiController = UIController.new()
 	local inputHandler = InputHandler.new(boardRenderer, uiController)
+	local cameraController = CameraController.new(boardAnchor)
 
-	local playerColor = nil -- Determined at the start of a match
+	activeModules = {
+		boardRenderer = boardRenderer,
+		uiController = uiController,
+		inputHandler = inputHandler,
+		cameraController = cameraController,
+	}
 
-	-- Hide Roblox's default UI
-	StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, false)
+	local playerColor = nil
+	local lastMagicState = { whiteUsed = false, blackUsed = false }
+
+	-- Hide non-essential Roblox UI
+	StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, false)
+	StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Health, false)
+
+	-- Connect UI events
+	uiController.resignButton.MouseButton1Click:Connect(function()
+		Remotes.ResignAttempt:FireServer()
+	end)
+
+	uiController.endGameModal.BackButton.MouseButton1Click:Connect(function()
+		ClientController.destroyAll()
+		-- In a real app, you'd show a lobby UI. For now, we'll re-queue.
+		wait(1)
+		ClientController.start()
+	end)
 
 
 	-- Listen for match state updates from the server
-	Remotes.MatchStateUpdate.OnClientEvent:Connect(function(snapshot: table)
-		print("Received match state update.")
-		boardRenderer:drawBoard(snapshot.boardState)
-
-		-- Determine the local player's color for the first time
+	local onStateUpdate = Remotes.MatchStateUpdate.OnClientEvent:Connect(function(snapshot: table)
 		if not playerColor then
 			if localPlayer.Name == snapshot.players.White then
 				playerColor = GameTypes.Colors.White
 			elseif localPlayer.Name == snapshot.players.Black then
 				playerColor = GameTypes.Colors.Black
 			end
-			print("Player color is:", playerColor)
 		end
 
-		-- Enable or disable input based on whose turn it is
+		if snapshot.isCheck then SoundManager.playCheckSound() end
+		if snapshot.lastMove and snapshot.lastMove.capturedPiece then cameraController:playEmphasis() end
+		if snapshot.magicState.whiteUsed ~= lastMagicState.whiteUsed or snapshot.magicState.blackUsed ~= lastMagicState.blackUsed then
+			cameraController:playEmphasis()
+			lastMagicState = snapshot.magicState
+		end
+
+		boardRenderer:drawBoard(snapshot.boardState, snapshot.lastMove)
+
 		if snapshot.activeColor == playerColor and snapshot.status == "InProgress" then
 			inputHandler:enable(snapshot.boardState, playerColor)
 		else
 			inputHandler:disable()
 		end
-
-		uiController:update(snapshot, playerColor) -- Update HUD
+		uiController:update(snapshot, playerColor)
 	end)
 
-	-- Listen for the end of the match
-	Remotes.MatchEnd.OnClientEvent:Connect(function(result: table)
-		print("Match ended. Result:", result)
+	local onMatchEnd = Remotes.MatchEnd.OnClientEvent:Connect(function(result: table)
 		inputHandler:disable()
 		uiController:showResult(result, playerColor)
 	end)
 
-	Remotes.MagicMoveRejected.OnClientEvent:Connect(function(reason: string)
-		print("Magic Move Rejected:", reason)
+	local onMagicRejected = Remotes.MagicMoveRejected.OnClientEvent:Connect(function(reason: string)
 		uiController:showToast("Magic Move Rejected: " .. reason)
 	end)
 
+	function activeModules.inputHandler:destroy()
+		onStateUpdate:Disconnect()
+		onMatchEnd:Disconnect()
+		onMagicRejected:Disconnect()
+	end
 
 	-- For testing, immediately request a match
-	-- In a real lobby, this would be tied to a UI button
-	wait(2) -- Wait for server to set up
-	print("Requesting quick match...")
+	wait(2)
 	Remotes.RequestQuickMatch:FireServer()
-
 end
-
 
 ClientController.start()
 

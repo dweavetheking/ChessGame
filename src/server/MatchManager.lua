@@ -48,6 +48,7 @@ function MatchManager.createMatch(playerWhite: Player, playerBlack: Player): Mat
 			[tostring(playerBlack.UserId)] = GameTypes.Colors.Black,
 		},
 		boardState = ChessEngine.newGame(),
+		previousBoardState = nil,
 		activeColor = GameTypes.Colors.White,
 		magicState = { whiteUsed = false, blackUsed = false },
 		moveHistory = {},
@@ -69,6 +70,7 @@ function MatchManager:getSnapshot()
 		activeColor = self.activeColor,
 		magicState = self.magicState,
 		status = self.status,
+		isCheck = ChessEngine.isCheck(self.boardState, self.activeColor),
 		players = {
 			White = self.players.White.Name,
 			Black = self.players.Black.Name,
@@ -111,16 +113,20 @@ function MatchManager:handlePlayerMove(player: Player, fromSquare: { x: number, 
 		return false, reason or "Illegal move"
 	end
 
-	-- Record last move for magic move system
-	self.lastMove = {
-		pieceId = pieceToMove.id,
-		fromSquare = fromSquare,
-		toSquare = toSquare,
-	}
+	-- Store the state *before* the move
+	self.previousBoardState = ChessEngine.cloneBoard(self.boardState)
 
 	-- Apply the move
-	local newBoard, _, _ = ChessEngine.applyMove(self.boardState, fromSquare, toSquare)
+	local newBoard, movedPiece, capturedPiece = ChessEngine.applyMove(self.boardState, fromSquare, toSquare)
 	self.boardState = newBoard
+
+	-- Record last move for magic move system
+	self.lastMove = {
+		pieceId = movedPiece.id,
+		fromSquare = fromSquare,
+		toSquare = toSquare,
+		capturedPiece = capturedPiece,
+	}
 
 	-- Swap active color
 	self.activeColor = (self.activeColor == GameTypes.Colors.White) and GameTypes.Colors.Black or GameTypes.Colors.White
@@ -165,7 +171,8 @@ function MatchManager:handleMagicMove(
 		targetSquare,
 		newType,
 		playerColor,
-		self.lastMove
+		self.lastMove,
+		self.previousBoardState
 	)
 
 	if not success then
@@ -195,6 +202,24 @@ function MatchManager:handleMagicMove(
 
 	self:broadcastUpdate()
 	return true
+end
+
+function MatchManager:handleResignation(player: Player)
+	if self.status ~= "InProgress" then
+		return -- Game is already over
+	end
+
+	local playerColor = self.playerIds[tostring(player.UserId)]
+	if not playerColor then
+		return
+	end
+
+	local winnerColor = (playerColor == GameTypes.Colors.White) and GameTypes.Colors.Black or GameTypes.Colors.White
+	self.status = `{winnerColor}Won_Resign`
+	print(`{playerColor} resigned. {winnerColor} wins.`)
+
+	self:broadcastUpdate()
+	-- Consider firing MatchEnd here as well
 end
 
 return MatchManager

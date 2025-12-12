@@ -12,6 +12,7 @@ local Shared = ReplicatedStorage.src.shared
 local Client = ReplicatedStorage.src.client
 local GameTypes = require(Shared.GameTypes)
 local SoundManager = require(Client.SoundManager)
+local ThemeManager = require(Client.ThemeManager)
 
 local BoardRenderer = {}
 BoardRenderer.__index = BoardRenderer
@@ -29,10 +30,11 @@ local HIGHLIGHT_COLOR = Color3.fromRGB(255, 255, 0)
 	@param anchor CFrame The CFrame where the center of the board should be.
 	@return BoardRenderer
 ]=]
-function BoardRenderer.new(anchor: CFrame)
+function BoardRenderer.new(anchor: CFrame, themeName: string?)
 	local self = setmetatable({}, BoardRenderer)
 
 	self.anchor = anchor
+	self.theme = ThemeManager.getTheme(themeName)
 	self.boardModel = Instance.new("Model")
 	self.boardModel.Name = "MagicChessBoard"
 	self.boardModel.Parent = Workspace
@@ -57,7 +59,7 @@ function BoardRenderer:_createBoard()
 	boardContainer.Anchored = true
 	boardContainer.CFrame = self.anchor
 	boardContainer.Parent = self.boardModel
-	boardContainer.Color = Color3.fromRGB(80, 40, 0) -- Wood color
+	boardContainer.Color = self.theme.BoardDark
 
 	for x = 1, BOARD_SIZE do
 		for y = 1, BOARD_SIZE do
@@ -71,9 +73,9 @@ function BoardRenderer:_createBoard()
 
 			-- Color the tile
 			if (x + y) % 2 == 0 then
-				tile.Color = Color3.fromRGB(235, 235, 208) -- Light
+				tile.Color = self.theme.BoardLight
 			else
-				tile.Color = Color3.fromRGB(119, 149, 86) -- Dark
+				tile.Color = self.theme.BoardDark
 			end
 
 			-- Position the tile
@@ -97,6 +99,7 @@ function BoardRenderer:_createPieceTemplates()
 		part.Name = name
 		part.Shape = shape
 		part.Size = size
+		part.Material = self.theme.PieceMaterial
 		part.Anchored = true
 		part.TopSurface = Enum.SurfaceType.Smooth
 		part.BottomSurface = Enum.SurfaceType.Smooth
@@ -164,7 +167,12 @@ end
 --[=[
 	Animates a piece's movement.
 ]=]
-function BoardRenderer:_animateMove(pieceModel: Part, toCFrame: CFrame)
+function BoardRenderer:_animateMove(pieceModel: Part, toCFrame: CFrame, isCapture: boolean)
+	if isCapture then
+		SoundManager.playCaptureSound()
+	else
+		SoundManager.playMoveSound()
+	end
 	local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
 	local tween = TweenService:Create(pieceModel, tweenInfo, { CFrame = toCFrame })
 	tween:Play()
@@ -174,6 +182,7 @@ end
 	Animates a piece being captured.
 ]=]
 function BoardRenderer:_animateCapture(pieceModel: Part)
+	SoundManager.playCaptureSound()
 	local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Linear)
 	local tween = TweenService:Create(pieceModel, tweenInfo, { Transparency = 1 })
 	tween:Play()
@@ -205,9 +214,10 @@ end
 	Renders the entire board state from a snapshot, animating changes.
 	@param boardState table The 8x8 grid of piece data.
 ]=]
-function BoardRenderer:drawBoard(boardState: ChessEngine.BoardState)
+function BoardRenderer:drawBoard(boardState: ChessEngine.BoardState, lastMove: table?)
 	local newPieceIds = {}
 	local piecesToMove = {}
+	local isCapture = lastMove and lastMove.capturedPiece
 
 	-- First pass: identify new pieces and pieces that moved
 	for y = 1, BOARD_SIZE do
@@ -219,7 +229,7 @@ function BoardRenderer:drawBoard(boardState: ChessEngine.BoardState)
 
 				if existingPiece then
 					-- Piece exists, check for changes
-					if not existingPiece.Name:match(pieceData.pieceType) then
+					if existingPiece:GetAttribute("PieceType") ~= pieceData.pieceType then
 						-- Piece type changed! Magic Move occurred.
 						self:animateMagicTransformation(existingPiece)
 						existingPiece:Destroy()
@@ -239,8 +249,9 @@ function BoardRenderer:drawBoard(boardState: ChessEngine.BoardState)
 					local template = self.pieceModels[pieceData.pieceType]
 					if template then
 						local newPiece = template:Clone()
+						newPiece:SetAttribute("PieceType", pieceData.pieceType)
 						newPiece.Name = `{pieceData.pieceType}_{pieceData.id}`
-						newPiece.Color = (pieceData.color == GameTypes.Colors.White) and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(20, 20, 20)
+						newPiece.Color = (pieceData.color == GameTypes.Colors.White) and self.theme.PieceWhite or self.theme.PieceBlack
 						newPiece.CFrame = self:_getPieceCFrame(x, y, newPiece.Size)
 						newPiece.Parent = self.boardModel
 						self.activePieces[pieceData.id] = newPiece
@@ -260,7 +271,7 @@ function BoardRenderer:drawBoard(boardState: ChessEngine.BoardState)
 
 	-- Animate all movements
 	for _, moveData in ipairs(piecesToMove) do
-		self:_animateMove(moveData.model, moveData.cframe)
+		self:_animateMove(moveData.model, moveData.cframe, isCapture)
 	end
 end
 
@@ -271,6 +282,7 @@ function BoardRenderer:destroy()
 	if self.boardModel then
 		self.boardModel:Destroy()
 	end
+	self.boardModel = nil
 	table.clear(self.pieceModels)
 	table.clear(self.activePieces)
 	table.clear(self.highlightParts)

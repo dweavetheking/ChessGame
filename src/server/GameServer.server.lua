@@ -71,6 +71,15 @@ local function onMagicMoveAttempt(player: Player, actionType: string, targetSqua
 	end
 end
 
+local function onResignAttempt(player: Player)
+	local match = activeMatches[player]
+	if match then
+		match:handleResignation(player)
+	else
+		warn(`Player {player.Name} tried to resign but is not in a match.`)
+	end
+end
+
 --[=[
 	Removes a player from any active match or queue when they leave.
 ]=]
@@ -106,6 +115,7 @@ function GameServer.start()
 	Remotes.RequestQuickMatch.OnServerEvent:Connect(queuePlayer)
 	Remotes.MoveAttempt.OnServerEvent:Connect(onMoveAttempt)
 	Remotes.MagicMoveAttempt.OnServerEvent:Connect(onMagicMoveAttempt)
+	Remotes.ResignAttempt.OnServerEvent:Connect(onResignAttempt)
 
 	Players.PlayerRemoving:Connect(onPlayerRemoving)
 end
